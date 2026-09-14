@@ -6,6 +6,7 @@
     <title>Hisset — ayollar atirlari</title>
     <meta name="description" content="Sizni esda qoldiradigan iforni tanlang. Hisset ayollar atirlari kolleksiyasi — 65 000 va 99 000 soʻm." />
     <meta name="theme-color" content="#96005f" />
+    <link rel="canonical" href="https://hisset-parfume.vercel.app/" />
     <style>
 :root{--s:min(100vw / 390,430px / 390);--c-bg:#fff;--c-ink:#171717;--c-accent:#c7007e;--c-accent-2:#ee0097;--c-on-cta:#fff;--c-brand:#96005f;--font-display:"Times New Roman",Georgia,serif}*{margin:0;padding:0;box-sizing:border-box}html{-webkit-text-size-adjust:100%;scrollbar-width:none}body{min-height:100vh;background:var(--c-bg);color:var(--c-ink);font-family:Arial,-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}.page{max-width:430px;margin-inline:auto;overflow:hidden}.brand{width:calc(133 * var(--s));height:calc(61 * var(--s));margin-inline:auto;padding-top:calc(9 * var(--s));border-radius:0 0 calc(17 * var(--s)) calc(17 * var(--s));background:var(--c-brand)}.brand_logo{display:block;width:calc(37 * var(--s));height:calc(42 * var(--s));margin-inline:auto;background:url(./assets/hisset-logo.png) center/contain no-repeat}.hero{position:relative;padding-top:calc(10 * var(--s));text-align:center}.hero_title{position:relative;z-index:1;min-height:calc(70 * var(--s));font-family:var(--font-display);font-size:calc(27 * var(--s));font-weight:700;line-height:calc(35 * var(--s));text-transform:uppercase;color:var(--c-accent);letter-spacing:calc(-.5 * var(--s))}.hero_sub{position:relative;z-index:1;max-width:calc(309 * var(--s));height:calc(38 * var(--s));margin:calc(3 * var(--s)) auto 0;font-size:calc(16 * var(--s));line-height:calc(19 * var(--s));color:#717171}.hero_visual{position:relative;width:100%;max-width:none;height:calc(334 * var(--s));margin:calc(6 * var(--s)) 0 0;background:url(./assets/hisset-hero-bg.png) center/cover no-repeat}.bonus{position:absolute;display:block;width:calc(56 * var(--s));height:calc(56 * var(--s));background:url(./assets/hisset-bonus.png) center/contain no-repeat}.hero_bonus{position:absolute;top:calc(131 * var(--s));right:calc(14 * var(--s));width:calc(89 * var(--s));height:calc(106 * var(--s))}.hero_bonus .bonus{width:calc(89 * var(--s));height:calc(89 * var(--s));background-image:url(./assets/hisset-hero-bonus.png)}.bonus_label{position:absolute;top:calc(89 * var(--s));left:0;width:100%;font-size:calc(12 * var(--s));line-height:calc(14 * var(--s));text-transform:uppercase;color:#4c4c4c}.price{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;width:calc(321 * var(--s));height:calc(59 * var(--s));margin:calc(-11 * var(--s)) auto 0;padding:0 calc(24 * var(--s));border:1px solid #ff4cbe;border-radius:calc(17 * var(--s));background:#fff}.price_old{position:relative;color:#8f8f8f;font-size:calc(22 * var(--s));font-weight:700;text-decoration:none}.price_old:after{content:"";position:absolute;inset:50% calc(-8 * var(--s)) auto;height:1px;background:red;transform:rotate(-8deg)}.price_current{position:relative;display:flex;align-items:center;padding-top:calc(5 * var(--s));font-family:var(--font-display);color:var(--c-accent)}.price_current strong{font-size:calc(34 * var(--s));line-height:calc(42 * var(--s))}.price_each{white-space:nowrap;position:absolute;left:0;top:0;font-family:Arial,sans-serif;font-size:calc(10 * var(--s));line-height:calc(13 * var(--s));color:#808080;text-transform:uppercase}.price_currency{font-size:calc(10 * var(--s));line-height:1;writing-mode:vertical-rl;text-transform:uppercase;color:#808080}.cta{text-decoration:none;display:flex;align-items:center;justify-content:center;width:100%;height:calc(53 * var(--s));border:0;border-radius:calc(12 * var(--s));background:linear-gradient(90deg,var(--c-accent),var(--c-accent-2),var(--c-accent));box-shadow:0 calc(3 * var(--s)) 0 #9d0064;color:#fff;font-family:Arial,sans-serif;font-size:calc(18 * var(--s));font-weight:700;line-height:1.2;text-transform:uppercase;cursor:pointer}.cta:active{transform:translateY(calc(2 * var(--s)));box-shadow:none}.cta:focus-visible{outline:3px solid var(--c-brand);outline-offset:4px}.cta_hero{position:relative;z-index:2;width:calc(346 * var(--s));height:calc(95 * var(--s));margin:calc(-11 * var(--s)) auto 0;gap:calc(12 * var(--s));font-size:calc(26 * var(--s));color:#ffe9bc;box-shadow:0 calc(4 * var(--s)) 0 #9d0064,inset 0 2px 3px #ff7cd0}.cta_hero span{font-size:calc(30 * var(--s));font-weight:400}.collection{padding-top:calc(44 * var(--s))}
     </style>
@@ -85,5 +86,19 @@ fbq('track', 'PageView');
 src="https://www.facebook.com/tr?id=1698644795296766&ev=PageView&noscript=1"
 /></noscript>
 <!-- End Meta Pixel Code -->
+    <script>
+      document.addEventListener("click", function (e) {
+        var cta = e.target.closest(".cta");
+        if (!cta || !window.fbq) return;
+        var card = cta.closest("[data-product-id]");
+        var price = card ? card.querySelector(".product_price").alt : document.querySelector(".price_current strong").textContent;
+        var data = { value: +price.replace(/\D/g, ""), currency: "UZS" };
+        if (card) {
+          data.content_ids = [card.dataset.productId];
+          data.content_type = "product";
+        }
+        fbq("track", "Purchase", data);
+      });
+    </script>
   </body>
 </html>
