@@ -53,21 +53,35 @@
         <p class="modal_kicker">Tanlangan atir</p>
         <h2 class="modal_title" id="modal-title">Ibraq</h2>
         <p class="modal_price">63 000 soʻm</p>
-        <form class="order_form" id="order-form">
-          <label class="field">Ism va familiya<input class="field_control" name="full_name" autocomplete="name" minlength="2" maxlength="120" placeholder="Ism va familiyangiz" required /></label>
-          <label class="field field_phone">Telefon raqami<span class="phone_control"><span class="phone_prefix" aria-hidden="true">+998</span><input class="field_control phone_input" name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="24" pattern="[0-9]{2} [0-9]{3} [0-9]{2} [0-9]{2}" placeholder="90 123 45 67" aria-label="Oʻzbekiston telefon raqami" required /></span></label>
-          <div class="field_row">
-            <div class="field"><label class="field_label" for="region">Viloyat</label><select class="field_control" id="region" name="region" autocomplete="address-level1" required disabled><option value="">Yuklanmoqda…</option></select></div>
-            <div class="field"><label class="field_label" for="district">Shahar / tuman</label><select class="field_control" id="district" name="district" autocomplete="address-level2" required disabled><option value="">Avval viloyatni tanlang</option></select></div>
+        <form class="order_form" id="order-form" novalidate>
+          <ol class="form_steps" aria-label="Buyurtma bosqichlari">
+            <li class="form_step_label" data-progress-step="1" aria-current="step"><span class="form_step_number" aria-hidden="true">1</span> Maʼlumotlar</li>
+            <li class="form_step_label" data-progress-step="2"><span class="form_step_number" aria-hidden="true">2</span> Yetkazib berish</li>
+          </ol>
+          <fieldset class="form_step" data-step="1">
+            <legend class="step_title" tabindex="-1">Siz bilan bogʻlanish</legend>
+            <label class="field">Ism va familiya<input class="field_control" name="full_name" autocomplete="name" minlength="2" maxlength="120" placeholder="Ism va familiyangiz" required /></label>
+            <label class="field field_phone">Telefon raqami<span class="phone_control"><span class="phone_prefix" aria-hidden="true">+998</span><input class="field_control phone_input" name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="24" pattern="[0-9]{2} [0-9]{3} [0-9]{2} [0-9]{2}" placeholder="90 123 45 67" aria-label="Oʻzbekiston telefon raqami" required /></span></label>
+          </fieldset>
+          <fieldset class="form_step" data-step="2" hidden disabled>
+            <legend class="step_title" tabindex="-1">Buyurtmani qayerga yuboramiz?</legend>
+            <div class="field_row">
+              <div class="field"><label class="field_label" for="region">Viloyat</label><select class="field_control" id="region" name="region" autocomplete="address-level1" required disabled><option value="">Yuklanmoqda…</option></select></div>
+              <div class="field"><label class="field_label" for="district">Shahar / tuman</label><select class="field_control" id="district" name="district" autocomplete="address-level2" required disabled><option value="">Avval viloyatni tanlang</option></select></div>
+            </div>
+            <div class="field_row">
+              <div class="field"><label class="field_label" for="post-type">Pochta</label><select class="field_control" id="post-type" name="post_type" required disabled><option value="">Tanlang</option></select></div>
+              <div class="field"><label class="field_label" for="post-office">Filial</label><select class="field_control" id="post-office" name="post_office" required disabled><option value="">Tuman va pochtani tanlang</option></select></div>
+            </div>
+            <label class="field">Qoʻshimcha manzil yoki moʻljal (ixtiyoriy)<textarea class="field_control" name="address_note" maxlength="500" placeholder="Ixtiyoriy"></textarea></label>
+            <p class="delivery_hint">Yetkazib berish narxi botda hisoblanadi.</p>
+          </fieldset>
+          <p class="form_status" id="form-status" role="status" aria-live="polite">Maʼlumotlarni kiriting va davom eting.</p>
+          <button class="delivery_retry" type="button" hidden>Qayta yuklash</button>
+          <div class="form_actions">
+            <button class="step_back" type="button" hidden><span aria-hidden="true">←</span> Orqaga</button>
+            <button class="modal_submit" type="submit" disabled>Davom etish →</button>
           </div>
-          <div class="field_row">
-            <div class="field"><label class="field_label" for="post-type">Pochta</label><select class="field_control" id="post-type" name="post_type" required disabled><option value="">Tanlang</option></select></div>
-            <div class="field"><label class="field_label" for="post-office">Filial</label><select class="field_control" id="post-office" name="post_office" required disabled><option value="">Tuman va pochtani tanlang</option></select></div>
-          </div>
-          <label class="field">Qoʻshimcha manzil yoki moʻljal (ixtiyoriy)<textarea class="field_control" name="address_note" maxlength="500" placeholder="Ixtiyoriy"></textarea></label>
-          <p class="delivery_hint">Yetkazib berish narxi botda hisoblanadi.</p>
-          <p class="form_status" id="form-status" role="status" aria-live="polite">Ism-familiya va telefonni kiriting.</p>
-          <button class="modal_submit" type="submit" disabled>Maʼlumotlarni kiriting</button>
         </form>
         <section class="payment_panel" tabindex="-1" aria-live="polite" hidden>
           <p class="payment_success">✓ Buyurtma maʼlumotlari qabul qilindi</p>
