@@ -58,10 +58,6 @@
         <h2 class="modal_title" id="modal-title">INDILA by Carlo Bossi — FEMME</h2>
         <p class="modal_price">104 000 soʻm</p>
         <form class="order_form" id="order-form" novalidate>
-          <ol class="form_steps" aria-label="Buyurtma bosqichlari">
-            <li class="form_step_label" data-progress-step="1" aria-current="step"><span class="form_step_number" aria-hidden="true">1</span> Maʼlumotlar</li>
-            <li class="form_step_label" data-progress-step="2"><span class="form_step_number" aria-hidden="true">2</span> Yetkazib berish</li>
-          </ol>
           <fieldset class="form_step" data-step="1">
             <legend class="step_title" tabindex="-1">Siz bilan bogʻlanish</legend>
             <label class="field">Ism va familiya<input class="field_control" name="full_name" autocomplete="name" minlength="2" maxlength="120" placeholder="Ism va familiyangiz" required /></label>
@@ -80,7 +76,7 @@
             <label class="field">Qoʻshimcha manzil yoki moʻljal (ixtiyoriy)<textarea class="field_control" name="address_note" maxlength="500" placeholder="Ixtiyoriy"></textarea></label>
             <p class="delivery_hint">Yetkazib berish narxi botda hisoblanadi.</p>
           </fieldset>
-          <p class="form_status" id="form-status" role="status" aria-live="polite">Maʼlumotlarni kiriting va davom eting.</p>
+          <p class="form_status" id="form-status" role="status" aria-live="polite" hidden></p>
           <button class="delivery_retry" type="button" hidden>Qayta yuklash</button>
           <div class="form_actions">
             <button class="step_back" type="button" hidden><span aria-hidden="true">←</span> Orqaga</button>
@@ -95,12 +91,11 @@
           <a class="payment_action" href="#">Chekni yuborish / Admin bilan bogʻlanish</a>
           <a class="payment_bot" href="#">Telegram botda davom etish</a>
         </section>
+        <a class="modal_help" href="https://hisset.shop/support" target="_blank" rel="noopener noreferrer" aria-label="Telegram orqali bogʻlanish (yangi oynada)">
+          <span class="modal_help_label">Telegram orqali bogʻlanish</span>
+          <span class="modal_help_icon" aria-hidden="true"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M21.7 3.2 18.5 19c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6 12.8l-4.8-1.5c-1-.3-1.1-1 .2-1.5L20.1 2.6c.9-.3 1.8.2 1.6.6Z"/></svg></span>
+        </a>
       </div>
-      <a class="modal_help" href="https://hisset.shop/support" target="_blank" rel="noopener noreferrer" aria-label="Yordam kerakmi? Admin bilan bogʻlanish (Telegram, yangi oynada)">
-        <span class="modal_help_icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" focusable="false"><path d="M20 11.5a7.8 7.8 0 0 1-.9 3.6 8 8 0 0 1-7.1 4.4 7.8 7.8 0 0 1-3.6-.9L3 20l1.4-5.4a7.8 7.8 0 0 1-.9-3.6 8 8 0 0 1 4.4-7.1 7.8 7.8 0 0 1 3.6-.9h.5a8 8 0 0 1 8 8v.5Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-        <span class="modal_help_copy"><span>Yordam kerakmi?</span><strong>Admin bilan bogʻlanish</strong></span>
-        <svg class="modal_help_arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </a>
     </dialog>
     <script src="../js/product-page.js" defer></script>
   </body>
