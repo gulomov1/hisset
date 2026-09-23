@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   const form=document.querySelector("#order-form"),status=document.querySelector("#form-status"),submit=form?.querySelector("[type=submit]");
   const steps=[...form.querySelectorAll(".form_step")],retryButton=form.querySelector(".delivery_retry");
   const body=document.body,localPreview=/^(localhost|127\.0\.0\.1)$/.test(location.hostname),apiBase=localPreview?(location.port==="5177"?"":location.protocol+"//"+location.hostname+":5177"):body.dataset.apiBase,productCode=body.dataset.productCode;
-  const state={token:createToken(),step:1,busy:false,config:null,configPromise:null,configRequest:0,telegramUrl:"",checkout:null,savedIdentity:"",expiresAt:0,request:0,officeRequest:0,retry:""};
+  const state={token:createToken(),step:1,busy:false,config:null,configPromise:null,configRequest:0,telegramUrl:"",checkout:null,savedIdentity:"",identityPayload:"",identityPromise:null,expiresAt:0,request:0,officeRequest:0,retry:"",finalized:false};
   const activeRequests=new Set();
   const officeCache=new Map();
   const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -45,6 +45,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   function moveGallery(step,manual=false){if(thumbs.length<2)return;const current=Math.max(0,thumbs.findIndex(item=>item.getAttribute("aria-pressed")==="true")),next=(current+step+thumbs.length)%thumbs.length;paintGallery(thumbs[next],step>=0?1:-1,true);if(manual)startAutoplay()}
   function startAutoplay(){stopAutoplay();if(thumbs.length<2||reducedMotion.matches||document.hidden||modal?.open)return;autoplayTimer=setInterval(()=>moveGallery(1),3800)}
   async function api(path,options={}){if(!modalOpen())throw new DOMException("Modal yopilgan.","AbortError");const controller=new AbortController();activeRequests.add(controller);try{const response=await fetch(apiBase+path,{...options,signal:controller.signal,headers:{"Content-Type":"application/json","X-Requested-With":"HissetShop",...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Server bilan aloqa boʻlmadi.");return data}catch(error){if(error.name==="AbortError")throw error;if(localPreview&&error instanceof TypeError)throw new Error("Lokal API serveri ishlamayapti. Terminalda node tools/serve.mjs 5177 ni ishga tushiring.");throw error}finally{activeRequests.delete(controller)}}
+  async function backgroundApi(path,options={}){try{const response=await fetch(apiBase+path,{...options,keepalive:true,headers:{"Content-Type":"application/json","X-Requested-With":"HissetShop",...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Server bilan aloqa boʻlmadi.");return data}catch(error){if(localPreview&&error instanceof TypeError)throw new Error("Lokal API serveri ishlamayapti. Terminalda node tools/serve.mjs 5177 ni ishga tushiring.");throw error}}
   function options(select,items,placeholder){select.innerHTML='<option value="">'+placeholder+'</option>'+items.map(item=>'<option value="'+escapeHtml(item)+'">'+escapeHtml(item)+'</option>').join("");select.disabled=false;syncSelect(select)}
   function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]))}
   async function loadConfig(){
@@ -90,19 +91,29 @@ document.addEventListener("DOMContentLoaded",()=>{
       if(error.name!=="AbortError"&&request===state.officeRequest&&modalOpen()){setRetry("offices");if(state.step===2)setStatus(error.message,true)}
     }finally{if(request===state.officeRequest)updateButton()}
   }
-  async function syncDraft(finalize=false){
+  function captureIdentity(){
+    const serialized=JSON.stringify(payload(false));
+    if(serialized===state.savedIdentity&&Date.now()<state.expiresAt)return Promise.resolve(state.checkout);
+    if(serialized===state.identityPayload&&state.identityPromise)return state.identityPromise;
+    state.identityPayload=serialized;
+    const pending=backgroundApi("/api/landing/drafts",{method:"POST",body:serialized}).then(result=>{
+      if(!result.telegram_url)throw new Error("Buyurtmani saqlab boʻlmadi.");
+      if(state.identityPayload===serialized){state.savedIdentity=serialized;state.expiresAt=Date.now()+(Number(result.expires_in)||86400)*1000;state.telegramUrl=result.telegram_url;if(!state.finalized)state.checkout=result}
+      return result;
+    }).catch(()=>{if(state.identityPayload===serialized)state.identityPayload="";return null}).finally(()=>{if(state.identityPromise===pending)state.identityPromise=null});
+    state.identityPromise=pending;return pending;
+  }
+  async function syncDraft(){
     if(!modalOpen()||!identityReady()||state.busy)return null;
-    const serialized=JSON.stringify(payload(finalize));
-    if(!finalize&&serialized===state.savedIdentity&&Date.now()<state.expiresAt)return state.checkout;
+    const serialized=JSON.stringify(payload(true));
     const request=++state.request;state.busy=true;updateButton();
-    setStatus(finalize?"Buyurtma qabul qilinmoqda…":"Maʼlumotlar qabul qilinmoqda…");
+    setStatus("Buyurtma qabul qilinmoqda…");
     try{
       const result=await api("/api/landing/drafts",{method:"POST",body:serialized});
       if(request!==state.request)return null;
       if(!result.telegram_url)throw new Error("Buyurtmani saqlab boʻlmadi. Qayta urinib koʻring.");
-      if(!finalize)state.savedIdentity=serialized;
       state.expiresAt=Date.now()+(Number(result.expires_in)||86400)*1000;
-      state.telegramUrl=result.telegram_url;state.checkout=result;return result;
+      state.telegramUrl=result.telegram_url;state.checkout=result;state.finalized=true;return result;
     }catch(error){
       if(error.name!=="AbortError"&&request===state.request&&modalOpen())setStatus(error.message,true);
       return null;
@@ -136,10 +147,10 @@ document.addEventListener("DOMContentLoaded",()=>{
     field("full_name").setCustomValidity(field("full_name").value.trim().length>=2?"":"Ism va familiyangizni kiriting.");
     field("phone").setCustomValidity(phoneReady()?"":"Oʻzbekiston telefon raqamini toʻliq kiriting.");
     if(!identityReady()){if(state.step!==1)showStep(1);form.reportValidity();return}
-    if(state.step===1){if(!form.reportValidity())return;const result=await syncDraft();if(result&&modalOpen())showStep(2);return}
+    if(state.step===1){if(!form.reportValidity())return;captureIdentity();showStep(2);return}
     if(!orderReady()){const missing=["region","district","post_type","post_office"].map(field).find(select=>!select.value);selectWidgets.get(missing)?.button.focus();setStatus("Yetkazib berish joyini toʻliq tanlang.",true);return}
     if(!form.reportValidity())return;
-    const result=await syncDraft(true);if(result&&modalOpen())showPayment(result);
+    const result=await syncDraft();if(result&&modalOpen())showPayment(result);
   });
   showStep(1,false);
   startAutoplay();
