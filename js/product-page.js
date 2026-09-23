@@ -3,8 +3,9 @@ document.addEventListener("DOMContentLoaded",()=>{
   const modal=document.querySelector("#order-modal"),openButton=document.querySelector(".js_order"),closeButton=modal?.querySelector(".modal_close");
   const form=document.querySelector("#order-form"),status=document.querySelector("#form-status"),submit=form?.querySelector("[type=submit]");
   const steps=[...form.querySelectorAll(".form_step")],retryButton=form.querySelector(".delivery_retry");
-  const body=document.body,localPreview=/^(localhost|127\.0\.0\.1)$/.test(location.hostname),apiBase=localPreview?(location.port==="5177"?"":location.protocol+"//"+location.hostname+":5177"):body.dataset.apiBase,productCode=body.dataset.productCode;
-  const state={token:createToken(),step:1,busy:false,config:null,configPromise:null,configRequest:0,telegramUrl:"",checkout:null,savedIdentity:"",identityPayload:"",identityPromise:null,expiresAt:0,request:0,officeRequest:0,retry:"",finalized:false};
+  const deliveryDataUrl="../assets/delivery-data.json";
+  const sheetsUrl="https://script.google.com/macros/s/AKfycbw5JZtoExsSxBC_8jqDJ5HTJSCXfGOZesjk1UdWFK_OnGwHmeU7qeCBOV4JZe1GubMkBA/exec";
+  const state={step:1,config:null,configPromise:null,configRequest:0,officeRequest:0,retry:"",createdAt:""};
   const activeRequests=new Set();
   const officeCache=new Map();
   const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -15,7 +16,6 @@ document.addEventListener("DOMContentLoaded",()=>{
   const initialThumb=thumbs.find(item=>item.getAttribute("aria-pressed")==="true");
   if(visual&&initialThumb)visual.style.backgroundSize=gallerySize(initialThumb);
 
-  function createToken(){const bytes=new Uint8Array(24);crypto.getRandomValues(bytes);return btoa(String.fromCharCode(...bytes)).replaceAll("+","-").replaceAll("/","_").replaceAll("=","")}
   function modalOpen(){return Boolean(modal?.open)}
   function field(name){return form.elements[name]}
   function setStatus(text,error=false){if(!status)return;status.textContent=text;status.hidden=!error;status.style.color=error?"#9d214d":"";status.style.background=error?"#fff0f5":""}
@@ -25,13 +25,14 @@ document.addEventListener("DOMContentLoaded",()=>{
   function phoneReady(){return localPhoneDigits(field("phone").value).length===9}
   function identityReady(){return field("full_name").value.trim().length>=2&&phoneReady()}
   function orderReady(){return identityReady()&&["region","district","post_type","post_office"].every(name=>field(name).value)}
-  function payload(finalize=false){const data={token:state.token,product_code:productCode,full_name:field("full_name").value.trim(),phone:normalizedPhone()};if(finalize)Object.assign(data,{region:field("region").value,district:field("district").value,post_type:field("post_type").value,post_office_id:field("post_office").value,address_note:field("address_note").value.trim(),finalize:true});return data}
-  function updateButton(){const ready=state.step===1?identityReady():orderReady();submit.disabled=state.busy||!ready;submit.textContent=state.busy?(state.step===1?"Davom etilmoqda…":"Tasdiqlanmoqda…"):(state.step===1?"Davom etish →":"Buyurtmani tasdiqlash");steps.forEach(step=>step.disabled=state.busy||Number(step.dataset.step)!==state.step);form.setAttribute("aria-busy",String(state.busy))}
-  function setRetry(kind=""){state.retry=kind;retryButton.hidden=!kind||state.step!==2;retryButton.disabled=state.busy}
+  function tashkentTimestamp(){const parts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Tashkent",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date()).filter(part=>part.type!=="literal").map(part=>[part.type,part.value]));return parts.day+"."+parts.month+"."+parts.year+" "+parts.hour+":"+parts.minute+":"+parts.second}
+  function sheetPayload(complete=false){if(!state.createdAt)state.createdAt=tashkentTimestamp();return{sheetName:"Lead",Ism:field("full_name").value.trim(),"Telefon raqam":normalizedPhone(),"Royhatdan o'tgan vaqti":state.createdAt,Viloyat:complete?field("region").value:"","Shahar/tuman":complete?field("district").value:"",Pochta:complete?field("post_type").value:"",Fillial:complete?field("post_office").value:"","Qoshimcha manzil yoki moljal":complete?field("address_note").value.trim():"",Atir:document.querySelector(".product_title")?.textContent.trim()||document.body.dataset.productCode||""}}
+  function sendToSheets(complete=false){fetch(sheetsUrl,{method:"POST",mode:"no-cors",credentials:"omit",keepalive:true,headers:{"Content-Type":"text/plain;charset=UTF-8"},body:JSON.stringify(sheetPayload(complete))}).catch(()=>console.warn("Sheets soʻrovini yuborib boʻlmadi."))}
+  function updateButton(){const ready=state.step===1?identityReady():orderReady();submit.disabled=!ready;submit.textContent=state.step===1?"Davom etish →":"Buyurtmani tasdiqlash";steps.forEach(step=>step.disabled=Number(step.dataset.step)!==state.step);form.setAttribute("aria-busy","false")}
+  function setRetry(kind=""){state.retry=kind;retryButton.hidden=!kind||state.step!==2;retryButton.disabled=false}
   function showStep(number,focus=true){closeSelect();state.step=number;steps.forEach(step=>step.hidden=Number(step.dataset.step)!==number);setRetry(state.retry);updateButton();setStatus("");modal.querySelector(".modal_inner").scrollTop=0;if(focus)steps[number-1].querySelector(".step_title").focus();if(number===2)loadConfig()}
-  function money(value){const amount=Number(value);return Number.isFinite(amount)&&amount>0?String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g," ")+" soʻm":""}
   function paymentPanel(){let panel=modal.querySelector(".payment_panel");if(panel)return panel;panel=document.createElement("section");panel.className="payment_panel";panel.hidden=true;panel.tabIndex=-1;panel.setAttribute("aria-live","polite");panel.innerHTML='<p class="payment_success">✓ Buyurtmangiz qabul qilindi. Tez orada operatorimiz siz bilan bogʻlanadi.</p><div class="payment_summary"><span>Tanlangan mahsulot</span><strong class="payment_product"></strong><b class="payment_amount"></b><small class="payment_description"></small></div><a class="payment_action" href="#"><span>Telegram orqali bogʻlanish</span><span class="modal_help_icon" aria-hidden="true"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M21.7 3.2 18.5 19c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6 12.8l-4.8-1.5c-1-.3-1.1-1 .2-1.5L20.1 2.6c.9-.3 1.8.2 1.6.6Z"/></svg></span></a><a class="payment_channel" href="https://t.me/+vE3ujSZuXVU3YmFi" target="_blank" rel="noopener noreferrer">Bizni Telegram kanalida kuzatib boring</a>';form.after(panel);return panel}
-  function showPayment(result){const panel=paymentPanel(),product=result.product||{},fallbackName=document.querySelector(".product_title")?.textContent.trim()||"Tanlangan mahsulot",fallbackPrice=document.querySelector(".current_price")?.textContent.trim()||"";panel.querySelector(".payment_product").textContent=product.name||fallbackName;panel.querySelector(".payment_amount").textContent=money(product.price)||fallbackPrice;const description=panel.querySelector(".payment_description");description.textContent=product.description||"";description.hidden=!description.textContent;const contact=panel.querySelector(".payment_action"),support=result.support_url||"";if(support){const message="Assalomu alaykum! Hisset’dan "+(product.name||fallbackName)+" mahsuloti boʻyicha yordam kerak.";contact.href=support+(support.includes("?")?"&":"?")+"text="+encodeURIComponent(message);contact.hidden=false}else contact.hidden=true;form.hidden=true;panel.hidden=false;modal.classList.add("has_payment");panel.focus()}
+  function showPayment(){const panel=paymentPanel(),productName=document.querySelector(".product_title")?.textContent.trim()||"Tanlangan mahsulot",productPrice=document.querySelector(".current_price")?.textContent.trim()||"";panel.querySelector(".payment_product").textContent=productName;panel.querySelector(".payment_amount").textContent=productPrice;const description=panel.querySelector(".payment_description");description.textContent="";description.hidden=true;const contact=panel.querySelector(".payment_action");contact.hidden=true;contact.style.display="none";form.hidden=true;panel.hidden=false;modal.classList.add("has_payment");panel.focus()}
   function closeSelect(returnFocus=false){if(!openSelect)return;const ui=selectWidgets.get(openSelect);if(ui){ui.widget.classList.remove("is_open");ui.widget.style.removeProperty("--select-chevron-rotate");ui.button.setAttribute("aria-expanded","false");ui.menu.hidden=true;if(returnFocus)ui.button.focus()}openSelect=null}
   function focusSelectOption(ui,index){const choices=[...ui.menu.querySelectorAll(".select_option:not([hidden]):not(:disabled)")];if(!choices.length)return;choices[(index+choices.length)%choices.length].focus()}
   function openCustomSelect(select,direction=1){const ui=selectWidgets.get(select);if(!ui||select.disabled)return;if(openSelect&&openSelect!==select)closeSelect();openSelect=select;ui.widget.classList.add("is_open");ui.widget.style.setProperty("--select-chevron-rotate","180deg");ui.button.setAttribute("aria-expanded","true");ui.menu.hidden=false;const choices=[...ui.menu.querySelectorAll(".select_option:not([hidden]):not(:disabled)")],selected=Math.max(0,choices.findIndex(option=>option.getAttribute("aria-selected")==="true")),index=select.value?selected:direction<0?choices.length-1:0;requestAnimationFrame(()=>focusSelectOption(ui,index))}
@@ -44,8 +45,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   function paintGallery(button,direction=1,animate=true){const current=thumbs.find(item=>item.getAttribute("aria-pressed")==="true");if(!button||button===current)return;const nextImage=getComputedStyle(button).getPropertyValue("--gallery-image"),nextSize=gallerySize(button),id=++transitionId;visual.setAttribute("aria-label",button.dataset.galleryAlt);thumbs.forEach(item=>item.setAttribute("aria-pressed",String(item===button)));revealThumb(button,animate);if(!animate||reducedMotion.matches){visual.style.backgroundImage=nextImage;visual.style.backgroundSize=nextSize;return}visual.querySelectorAll("[data-gallery-slide]").forEach(node=>node.remove());visual.style.position="relative";visual.style.overflow="hidden";const slide=document.createElement("span");slide.dataset.gallerySlide="";slide.setAttribute("aria-hidden","true");Object.assign(slide.style,{position:"absolute",inset:"0",zIndex:"1",pointerEvents:"none",backgroundImage:nextImage,backgroundPosition:"center",backgroundRepeat:"no-repeat",backgroundSize:nextSize,willChange:"transform"});visual.append(slide);const animation=slide.animate([{transform:"translateX("+(direction*100)+"%)"},{transform:"translateX(0)"}],{duration:460,easing:"cubic-bezier(.22,1,.36,1)"});animation.finished.then(()=>{if(id===transitionId){visual.style.backgroundImage=nextImage;visual.style.backgroundSize=nextSize}slide.remove()}).catch(()=>slide.remove())}
   function moveGallery(step,manual=false){if(thumbs.length<2)return;const current=Math.max(0,thumbs.findIndex(item=>item.getAttribute("aria-pressed")==="true")),next=(current+step+thumbs.length)%thumbs.length;paintGallery(thumbs[next],step>=0?1:-1,true);if(manual)startAutoplay()}
   function startAutoplay(){stopAutoplay();if(thumbs.length<2||reducedMotion.matches||document.hidden||modal?.open)return;autoplayTimer=setInterval(()=>moveGallery(1),3800)}
-  async function api(path,options={}){if(!modalOpen())throw new DOMException("Modal yopilgan.","AbortError");const controller=new AbortController();activeRequests.add(controller);try{const response=await fetch(apiBase+path,{...options,signal:controller.signal,headers:{"Content-Type":"application/json","X-Requested-With":"HissetShop",...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Server bilan aloqa boʻlmadi.");return data}catch(error){if(error.name==="AbortError")throw error;if(localPreview&&error instanceof TypeError)throw new Error("Lokal API serveri ishlamayapti. Terminalda node tools/serve.mjs 5177 ni ishga tushiring.");throw error}finally{activeRequests.delete(controller)}}
-  async function backgroundApi(path,options={}){try{const response=await fetch(apiBase+path,{...options,keepalive:true,headers:{"Content-Type":"application/json","X-Requested-With":"HissetShop",...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Server bilan aloqa boʻlmadi.");return data}catch(error){if(localPreview&&error instanceof TypeError)throw new Error("Lokal API serveri ishlamayapti. Terminalda node tools/serve.mjs 5177 ni ishga tushiring.");throw error}}
+  async function fetchDeliveryData(){if(!modalOpen())throw new DOMException("Modal yopilgan.","AbortError");const controller=new AbortController();activeRequests.add(controller);try{const response=await fetch(deliveryDataUrl,{signal:controller.signal,credentials:"same-origin"});if(!response.ok)throw new Error("Yetkazib berish manzillarini yuklab boʻlmadi.");const data=await response.json();if(!data||!Array.isArray(data.regions)||!data.districts||!Array.isArray(data.branches))throw new Error("Yetkazib berish manzillari notoʻgʻri.");return data}finally{activeRequests.delete(controller)}}
   function options(select,items,placeholder){select.innerHTML='<option value="">'+placeholder+'</option>'+items.map(item=>'<option value="'+escapeHtml(item)+'">'+escapeHtml(item)+'</option>').join("");select.disabled=false;syncSelect(select)}
   function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]))}
   async function loadConfig(){
@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     setRetry();setStatus("Yetkazib berish manzillari yuklanmoqda…");
     const pending=(async()=>{
       try{
-        const config=await api("/api/landing/config");
+        const config=await fetchDeliveryData();
         if(request!==state.configRequest)return;
         state.config=config;
         options(field("region"),config.regions,"Viloyatni tanlang");
@@ -68,58 +68,24 @@ document.addEventListener("DOMContentLoaded",()=>{
     state.configPromise=pending;return pending;
   }
   function resetOffices(text="Tuman va pochtani tanlang"){field("post_office").innerHTML='<option value="">'+text+'</option>';field("post_office").disabled=true;syncSelect(field("post_office"))}
-  async function loadOffices(force=false){
+  function distanceKm(a,b){const toRadians=value=>value*Math.PI/180,[lat1,lon1,lat2,lon2]=[a.lat,a.lon,b.lat,b.lon].map(toRadians),h=Math.sin((lat2-lat1)/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin((lon2-lon1)/2)**2;return 6371*2*Math.asin(Math.sqrt(h))}
+  function officesFor(region,district,type){const branches=state.config?.branches||[],available=branches.filter(branch=>branch.region===region&&branch.carrier===type),own=available.filter(branch=>branch.district===district),rest=available.filter(branch=>branch.district!==district),points=branches.filter(branch=>branch.region===region&&branch.district===district&&Number.isFinite(branch.lat)&&Number.isFinite(branch.lon));if(!points.length)return own.concat(rest);const point={lat:points.reduce((sum,item)=>sum+item.lat,0)/points.length,lon:points.reduce((sum,item)=>sum+item.lon,0)/points.length};rest.sort((a,b)=>distanceKm(point,a)-distanceKm(point,b));return own.concat(rest.slice(0,8),rest.slice(8).sort((a,b)=>a.district.localeCompare(b.district,"uz")||a.label.localeCompare(b.label,"uz")))}
+  function loadOffices(force=false){
     if(!modalOpen()||state.step!==2)return;
     const request=++state.officeRequest,region=field("region").value,district=field("district").value,type=field("post_type").value;
     resetOffices();setRetry();updateButton();
     if(!region||!district||!type)return;
     const query=String(new URLSearchParams({region,district,type}));
     if(force)officeCache.delete(query);
-    field("post_office").innerHTML='<option value="">Filiallar yuklanmoqda…</option>';syncSelect(field("post_office"));
-    setStatus("Pochta filiallari yuklanmoqda…");
-    let pending=officeCache.get(query);
-    if(!pending){pending=api("/api/landing/post-offices?"+query,{headers:{}});officeCache.set(query,pending)}
-    try{
-      const data=await pending;
-      if(request!==state.officeRequest)return;
-      const offices=data.offices||[];
-      field("post_office").innerHTML='<option value="">Filialni tanlang</option>'+offices.map(office=>'<option value="'+escapeHtml(office.id)+'">'+escapeHtml(office.label)+'</option>').join("");
-      field("post_office").disabled=!offices.length;syncSelect(field("post_office"));
-      if(state.step===2)setStatus(offices.length?"Sizga qulay pochta filialini tanlang.":"Bu hududda tanlangan pochta filiali topilmadi.",!offices.length);
-    }catch(error){
-      if(officeCache.get(query)===pending)officeCache.delete(query);
-      if(error.name!=="AbortError"&&request===state.officeRequest&&modalOpen()){setRetry("offices");if(state.step===2)setStatus(error.message,true)}
-    }finally{if(request===state.officeRequest)updateButton()}
+    let offices=officeCache.get(query);
+    if(!offices){offices=officesFor(region,district,type);officeCache.set(query,offices)}
+    if(request!==state.officeRequest)return;
+    field("post_office").innerHTML='<option value="">Filialni tanlang</option>'+offices.map(office=>'<option value="'+escapeHtml(office.id)+'">'+escapeHtml(office.label)+'</option>').join("");
+    field("post_office").disabled=!offices.length;syncSelect(field("post_office"));
+    if(state.step===2)setStatus(offices.length?"Sizga qulay pochta filialini tanlang.":"Bu hududda tanlangan pochta filiali topilmadi.",!offices.length);
+    updateButton();
   }
-  function captureIdentity(){
-    const serialized=JSON.stringify(payload(false));
-    if(serialized===state.savedIdentity&&Date.now()<state.expiresAt)return Promise.resolve(state.checkout);
-    if(serialized===state.identityPayload&&state.identityPromise)return state.identityPromise;
-    state.identityPayload=serialized;
-    const pending=backgroundApi("/api/landing/drafts",{method:"POST",body:serialized}).then(result=>{
-      if(!result.telegram_url)throw new Error("Buyurtmani saqlab boʻlmadi.");
-      if(state.identityPayload===serialized){state.savedIdentity=serialized;state.expiresAt=Date.now()+(Number(result.expires_in)||86400)*1000;state.telegramUrl=result.telegram_url;if(!state.finalized)state.checkout=result}
-      return result;
-    }).catch(()=>{if(state.identityPayload===serialized)state.identityPayload="";return null}).finally(()=>{if(state.identityPromise===pending)state.identityPromise=null});
-    state.identityPromise=pending;return pending;
-  }
-  async function syncDraft(){
-    if(!modalOpen()||!identityReady()||state.busy)return null;
-    const serialized=JSON.stringify(payload(true));
-    const request=++state.request;state.busy=true;updateButton();
-    setStatus("Buyurtma qabul qilinmoqda…");
-    try{
-      const result=await api("/api/landing/drafts",{method:"POST",body:serialized});
-      if(request!==state.request)return null;
-      if(!result.telegram_url)throw new Error("Buyurtmani saqlab boʻlmadi. Qayta urinib koʻring.");
-      state.expiresAt=Date.now()+(Number(result.expires_in)||86400)*1000;
-      state.telegramUrl=result.telegram_url;state.checkout=result;state.finalized=true;return result;
-    }catch(error){
-      if(error.name!=="AbortError"&&request===state.request&&modalOpen())setStatus(error.message,true);
-      return null;
-    }finally{if(request===state.request){state.busy=false;updateButton()}}
-  }
-  function stopModalRequests(){state.request++;state.configRequest++;state.officeRequest++;state.configPromise=null;state.busy=false;activeRequests.forEach(controller=>controller.abort());activeRequests.clear();updateButton();startAutoplay()}
+  function stopModalRequests(){state.configRequest++;state.officeRequest++;state.configPromise=null;activeRequests.forEach(controller=>controller.abort());activeRequests.clear();updateButton();startAutoplay()}
 
   form?.querySelectorAll("select").forEach(enhanceSelect);
   document.addEventListener("pointerdown",event=>{if(openSelect&&!selectWidgets.get(openSelect)?.widget.contains(event.target))closeSelect()});
@@ -136,21 +102,21 @@ document.addEventListener("DOMContentLoaded",()=>{
   modal?.addEventListener("click",event=>{if(event.target===modal)modal.close()});
   modal?.addEventListener("close",()=>{closeSelect();stopModalRequests()});
   field("phone")?.addEventListener("beforeinput",event=>{if(event.inputType==="insertText"&&event.data?.length===1&&/\D/.test(event.data))event.preventDefault()});
-  form?.addEventListener("input",event=>{if(!modalOpen()||state.busy)return;if(event.target.name==="phone")event.target.value=formatLocalPhone(event.target.value);event.target.setCustomValidity?.("");updateButton();if(state.step===1)setStatus("")});
-  field("region")?.addEventListener("change",()=>{if(!modalOpen()||state.step!==2||state.busy)return;const districts=state.config?.districts?.[field("region").value]||[];options(field("district"),districts,"Shahar yoki tumanni tanlang");loadOffices()});
+  form?.addEventListener("input",event=>{if(!modalOpen())return;if(event.target.name==="phone")event.target.value=formatLocalPhone(event.target.value);event.target.setCustomValidity?.("");updateButton();if(state.step===1)setStatus("")});
+  field("region")?.addEventListener("change",()=>{if(!modalOpen()||state.step!==2)return;const districts=state.config?.districts?.[field("region").value]||[];options(field("district"),districts,"Shahar yoki tumanni tanlang");loadOffices()});
   field("district")?.addEventListener("change",()=>loadOffices());
   field("post_type")?.addEventListener("change",()=>loadOffices());
-  field("post_office")?.addEventListener("change",()=>{if(!modalOpen()||state.step!==2||state.busy)return;updateButton();setStatus("Tayyor. Buyurtmani tasdiqlang.")});
-  retryButton.addEventListener("click",()=>{if(state.busy||state.step!==2)return;if(state.retry==="config")loadConfig();else if(state.retry==="offices")loadOffices(true)});
-  form?.addEventListener("submit",async event=>{
-    event.preventDefault();if(!modalOpen()||state.busy||form.hidden)return;
+  field("post_office")?.addEventListener("change",()=>{if(!modalOpen()||state.step!==2)return;updateButton();setStatus("Tayyor. Buyurtmani tasdiqlang.")});
+  retryButton.addEventListener("click",()=>{if(state.step!==2)return;if(state.retry==="config")loadConfig();else if(state.retry==="offices")loadOffices(true)});
+  form?.addEventListener("submit",event=>{
+    event.preventDefault();if(!modalOpen()||form.hidden)return;
     field("full_name").setCustomValidity(field("full_name").value.trim().length>=2?"":"Ism va familiyangizni kiriting.");
     field("phone").setCustomValidity(phoneReady()?"":"Oʻzbekiston telefon raqamini toʻliq kiriting.");
     if(!identityReady()){if(state.step!==1)showStep(1);form.reportValidity();return}
-    if(state.step===1){if(!form.reportValidity())return;captureIdentity();showStep(2);return}
+    if(state.step===1){if(!form.reportValidity())return;sendToSheets(false);showStep(2);return}
     if(!orderReady()){const missing=["region","district","post_type","post_office"].map(field).find(select=>!select.value);selectWidgets.get(missing)?.button.focus();setStatus("Yetkazib berish joyini toʻliq tanlang.",true);return}
     if(!form.reportValidity())return;
-    const result=await syncDraft();if(result&&modalOpen())showPayment(result);
+    sendToSheets(true);showPayment();
   });
   showStep(1,false);
   startAutoplay();
