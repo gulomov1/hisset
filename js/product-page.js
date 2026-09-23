@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   const steps=[...form.querySelectorAll(".form_step")],retryButton=form.querySelector(".delivery_retry");
   const deliveryDataUrl="../assets/delivery-data.json";
   const sheetsUrl="https://script.google.com/macros/s/AKfycbw5JZtoExsSxBC_8jqDJ5HTJSCXfGOZesjk1UdWFK_OnGwHmeU7qeCBOV4JZe1GubMkBA/exec";
-  const state={step:1,config:null,configPromise:null,configRequest:0,officeRequest:0,retry:"",createdAt:""};
+  const state={step:1,config:null,configPromise:null,configRequest:0,officeRequest:0,retry:"",createdAt:"",identityFailed:false};
   const activeRequests=new Set();
   const officeCache=new Map();
   const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -27,9 +27,9 @@ document.addEventListener("DOMContentLoaded",()=>{
   function orderReady(){return identityReady()&&["region","district","post_type","post_office"].every(name=>field(name).value)}
   function tashkentTimestamp(){const parts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Tashkent",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date()).filter(part=>part.type!=="literal").map(part=>[part.type,part.value]));return parts.day+"."+parts.month+"."+parts.year+" "+parts.hour+":"+parts.minute+":"+parts.second}
   function sheetPayload(complete=false){if(!state.createdAt)state.createdAt=tashkentTimestamp();return{sheetName:"Lead",Ism:field("full_name").value.trim(),"Telefon raqam":normalizedPhone(),"Royhatdan o'tgan vaqti":state.createdAt,Viloyat:complete?field("region").value:"","Shahar/tuman":complete?field("district").value:"",Pochta:complete?field("post_type").value:"",Fillial:complete?field("post_office").value:"","Qoshimcha manzil yoki moljal":complete?field("address_note").value.trim():"",Atir:document.querySelector(".product_title")?.textContent.trim()||document.body.dataset.productCode||""}}
-  function sendToSheets(complete=false){fetch(sheetsUrl,{method:"POST",mode:"no-cors",credentials:"omit",keepalive:true,headers:{"Content-Type":"text/plain;charset=UTF-8"},body:JSON.stringify(sheetPayload(complete))}).catch(()=>console.warn("Sheets soʻrovini yuborib boʻlmadi."))}
+  async function sendToSheets(complete=false){try{const response=await fetch(sheetsUrl,{method:"POST",mode:"cors",credentials:"omit",keepalive:true,headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body:new URLSearchParams(sheetPayload(complete))}),result=await response.json().catch(()=>({}));if(!response.ok||result.ok!==true)throw new Error(result.message||"Sheets maʼlumotni qabul qilmadi.");if(!complete){state.identityFailed=false;if(state.retry==="identity"){setRetry();setStatus("")}}return true}catch(error){console.warn("Sheets soʻrovini yuborib boʻlmadi.",error);if(!complete&&modalOpen()&&state.step===2&&!form.hidden){state.identityFailed=true;setRetry("identity");setStatus("Ism va telefon saqlanmadi. Qayta yuborishni bosing.",true)}return false}}
   function updateButton(){const ready=state.step===1?identityReady():orderReady();submit.disabled=!ready;submit.textContent=state.step===1?"Davom etish →":"Buyurtmani tasdiqlash";steps.forEach(step=>step.disabled=Number(step.dataset.step)!==state.step);form.setAttribute("aria-busy","false")}
-  function setRetry(kind=""){state.retry=kind;retryButton.hidden=!kind||state.step!==2;retryButton.disabled=false}
+  function setRetry(kind=""){state.retry=kind;retryButton.hidden=!kind||state.step!==2;retryButton.disabled=false;retryButton.textContent=kind==="identity"?"Qayta yuborish":"Qayta yuklash"}
   function showStep(number,focus=true){closeSelect();state.step=number;steps.forEach(step=>step.hidden=Number(step.dataset.step)!==number);setRetry(state.retry);updateButton();setStatus("");modal.querySelector(".modal_inner").scrollTop=0;if(focus)steps[number-1].querySelector(".step_title").focus();if(number===2)loadConfig()}
   function paymentPanel(){let panel=modal.querySelector(".payment_panel");if(panel)return panel;panel=document.createElement("section");panel.className="payment_panel";panel.hidden=true;panel.tabIndex=-1;panel.setAttribute("aria-live","polite");panel.innerHTML='<p class="payment_success">✓ Buyurtmangiz qabul qilindi. Tez orada operatorimiz siz bilan bogʻlanadi.</p><div class="payment_summary"><span>Tanlangan mahsulot</span><strong class="payment_product"></strong><b class="payment_amount"></b><small class="payment_description"></small></div><a class="payment_action" href="#"><span>Telegram orqali bogʻlanish</span><span class="modal_help_icon" aria-hidden="true"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M21.7 3.2 18.5 19c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6 12.8l-4.8-1.5c-1-.3-1.1-1 .2-1.5L20.1 2.6c.9-.3 1.8.2 1.6.6Z"/></svg></span></a><a class="payment_channel" href="https://t.me/+vE3ujSZuXVU3YmFi" target="_blank" rel="noopener noreferrer">Bizni Telegram kanalida kuzatib boring</a>';form.after(panel);return panel}
   function showPayment(){const panel=paymentPanel(),productName=document.querySelector(".product_title")?.textContent.trim()||"Tanlangan mahsulot",productPrice=document.querySelector(".current_price")?.textContent.trim()||"";panel.querySelector(".payment_product").textContent=productName;panel.querySelector(".payment_amount").textContent=productPrice;const description=panel.querySelector(".payment_description");description.textContent="";description.hidden=true;const contact=panel.querySelector(".payment_action");contact.hidden=true;contact.style.display="none";form.hidden=true;panel.hidden=false;modal.classList.add("has_payment");panel.focus()}
@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     if(state.config||!modalOpen()||state.step!==2)return;
     if(state.configPromise)return state.configPromise;
     const request=++state.configRequest;
-    setRetry();setStatus("Yetkazib berish manzillari yuklanmoqda…");
+    if(!state.identityFailed){setRetry();setStatus("Yetkazib berish manzillari yuklanmoqda…")}
     const pending=(async()=>{
       try{
         const config=await fetchDeliveryData();
@@ -60,9 +60,9 @@ document.addEventListener("DOMContentLoaded",()=>{
         state.config=config;
         options(field("region"),config.regions,"Viloyatni tanlang");
         options(field("post_type"),config.post_types,"Pochta xizmatini tanlang");
-        if(state.step===2)setStatus("Yetkazib berish joyini tanlang.");
+        if(state.step===2&&!state.identityFailed)setStatus("Yetkazib berish joyini tanlang.");
       }catch(error){
-        if(error.name!=="AbortError"&&request===state.configRequest&&modalOpen()){setRetry("config");if(state.step===2)setStatus(error.message,true)}
+        if(error.name!=="AbortError"&&request===state.configRequest&&modalOpen()&&!state.identityFailed){setRetry("config");if(state.step===2)setStatus(error.message,true)}
       }finally{if(request===state.configRequest)state.configPromise=null}
     })();
     state.configPromise=pending;return pending;
@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   function loadOffices(force=false){
     if(!modalOpen()||state.step!==2)return;
     const request=++state.officeRequest,region=field("region").value,district=field("district").value,type=field("post_type").value;
-    resetOffices();setRetry();updateButton();
+    resetOffices();if(!state.identityFailed)setRetry();updateButton();
     if(!region||!district||!type)return;
     const query=String(new URLSearchParams({region,district,type}));
     if(force)officeCache.delete(query);
@@ -82,7 +82,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     if(request!==state.officeRequest)return;
     field("post_office").innerHTML='<option value="">Filialni tanlang</option>'+offices.map(office=>'<option value="'+escapeHtml(office.id)+'">'+escapeHtml(office.label)+'</option>').join("");
     field("post_office").disabled=!offices.length;syncSelect(field("post_office"));
-    if(state.step===2)setStatus(offices.length?"Sizga qulay pochta filialini tanlang.":"Bu hududda tanlangan pochta filiali topilmadi.",!offices.length);
+    if(state.step===2&&!state.identityFailed)setStatus(offices.length?"Sizga qulay pochta filialini tanlang.":"Bu hududda tanlangan pochta filiali topilmadi.",!offices.length);
     updateButton();
   }
   function stopModalRequests(){state.configRequest++;state.officeRequest++;state.configPromise=null;activeRequests.forEach(controller=>controller.abort());activeRequests.clear();updateButton();startAutoplay()}
@@ -106,17 +106,17 @@ document.addEventListener("DOMContentLoaded",()=>{
   field("region")?.addEventListener("change",()=>{if(!modalOpen()||state.step!==2)return;const districts=state.config?.districts?.[field("region").value]||[];options(field("district"),districts,"Shahar yoki tumanni tanlang");loadOffices()});
   field("district")?.addEventListener("change",()=>loadOffices());
   field("post_type")?.addEventListener("change",()=>loadOffices());
-  field("post_office")?.addEventListener("change",()=>{if(!modalOpen()||state.step!==2)return;updateButton();setStatus("Tayyor. Buyurtmani tasdiqlang.")});
-  retryButton.addEventListener("click",()=>{if(state.step!==2)return;if(state.retry==="config")loadConfig();else if(state.retry==="offices")loadOffices(true)});
+  field("post_office")?.addEventListener("change",()=>{if(!modalOpen()||state.step!==2)return;updateButton();if(!state.identityFailed)setStatus("Tayyor. Buyurtmani tasdiqlang.")});
+  retryButton.addEventListener("click",()=>{if(state.step!==2)return;if(state.retry==="identity"){state.identityFailed=false;setRetry();setStatus("");void sendToSheets(false)}else if(state.retry==="config")loadConfig();else if(state.retry==="offices")loadOffices(true)});
   form?.addEventListener("submit",event=>{
     event.preventDefault();if(!modalOpen()||form.hidden)return;
     field("full_name").setCustomValidity(field("full_name").value.trim().length>=2?"":"Ism va familiyangizni kiriting.");
     field("phone").setCustomValidity(phoneReady()?"":"Oʻzbekiston telefon raqamini toʻliq kiriting.");
     if(!identityReady()){if(state.step!==1)showStep(1);form.reportValidity();return}
-    if(state.step===1){if(!form.reportValidity())return;sendToSheets(false);showStep(2);return}
+    if(state.step===1){if(!form.reportValidity())return;void sendToSheets(false);showStep(2);return}
     if(!orderReady()){const missing=["region","district","post_type","post_office"].map(field).find(select=>!select.value);selectWidgets.get(missing)?.button.focus();setStatus("Yetkazib berish joyini toʻliq tanlang.",true);return}
     if(!form.reportValidity())return;
-    sendToSheets(true);showPayment();
+    void sendToSheets(true);showPayment();
   });
   showStep(1,false);
   startAutoplay();
