@@ -1,3 +1,11 @@
+(function(f,b,e,v,n,t,s){
+  if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=true;n.version="2.0";n.queue=[];
+  t=b.createElement(e);t.async=true;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)
+})(window,document,"script","https://connect.facebook.net/en_US/fbevents.js");
+window.fbq("init","1698644795296766");
+window.fbq("track","PageView");
+
 document.addEventListener("DOMContentLoaded",()=>{
   const visual=document.querySelector(".product_visual"),thumbs=[...document.querySelectorAll("[data-gallery-index]")];
   const modal=document.querySelector("#order-modal"),openButton=document.querySelector(".js_order"),closeButton=modal?.querySelector(".modal_close");
@@ -5,7 +13,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   const steps=[...form.querySelectorAll(".form_step")],retryButton=form.querySelector(".delivery_retry");
   const deliveryDataUrl="../assets/delivery-data.json";
   const sheetsUrl="https://script.google.com/macros/s/AKfycbw5JZtoExsSxBC_8jqDJ5HTJSCXfGOZesjk1UdWFK_OnGwHmeU7qeCBOV4JZe1GubMkBA/exec";
-  const state={step:1,config:null,configPromise:null,configRequest:0,officeRequest:0,retry:"",createdAt:"",identityFailed:false};
+  const state={step:1,config:null,configPromise:null,configRequest:0,officeRequest:0,retry:"",createdAt:"",identityFailed:false,metaEvents:new Set()};
   const activeRequests=new Set();
   const officeCache=new Map();
   const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -25,6 +33,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   function phoneReady(){return localPhoneDigits(field("phone").value).length===9}
   function identityReady(){return field("full_name").value.trim().length>=2&&phoneReady()}
   function orderReady(){return identityReady()&&["region","district","post_type","post_office"].every(name=>field(name).value)}
+  function metaPayload(){const price=Number((document.querySelector(".current_price")?.textContent||"").replace(/\D/g,""));return{content_ids:[document.body.dataset.productId],content_type:"product",content_name:document.querySelector(".product_title")?.textContent.trim()||document.body.dataset.productCode||"",value:price,currency:"UZS"}}
+  function trackMeta(name){if(state.metaEvents.has(name)||typeof window.fbq!=="function")return;try{window.fbq("track",name,metaPayload());state.metaEvents.add(name)}catch(error){console.warn("Meta Pixel hodisasi yuborilmadi.",error)}}
   function tashkentTimestamp(){const parts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Tashkent",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date()).filter(part=>part.type!=="literal").map(part=>[part.type,part.value]));return parts.day+"."+parts.month+"."+parts.year+" "+parts.hour+":"+parts.minute+":"+parts.second}
   function sheetPayload(complete=false){if(!state.createdAt)state.createdAt=tashkentTimestamp();return{sheetName:"Lead",Ism:field("full_name").value.trim(),"Telefon raqam":normalizedPhone(),"Royhatdan o'tgan vaqti":state.createdAt,Viloyat:complete?field("region").value:"","Shahar/tuman":complete?field("district").value:"",Pochta:complete?field("post_type").value:"",Fillial:complete?field("post_office").value:"","Qoshimcha manzil yoki moljal":complete?field("address_note").value.trim():"",Atir:document.querySelector(".product_title")?.textContent.trim()||document.body.dataset.productCode||""}}
   async function sendToSheets(complete=false){try{const response=await fetch(sheetsUrl,{method:"POST",mode:"cors",credentials:"omit",keepalive:true,headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body:new URLSearchParams(sheetPayload(complete))}),result=await response.json().catch(()=>({}));if(!response.ok||result.ok!==true)throw new Error(result.message||"Sheets maʼlumotni qabul qilmadi.");if(!complete){state.identityFailed=false;if(state.retry==="identity"){setRetry();setStatus("")}}return true}catch(error){console.warn("Sheets soʻrovini yuborib boʻlmadi.",error);if(!complete&&modalOpen()&&state.step===2&&!form.hidden){state.identityFailed=true;setRetry("identity");setStatus("Ism va telefon saqlanmadi. Qayta yuborishni bosing.",true)}return false}}
@@ -97,7 +107,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   visual?.addEventListener("mouseleave",startAutoplay);
   document.addEventListener("visibilitychange",startAutoplay);
   reducedMotion.addEventListener?.("change",startAutoplay);
-  openButton?.addEventListener("click",()=>{stopAutoplay();modal.showModal();if(state.step===2&&!form.hidden){loadConfig();if(field("region").value&&field("district").value&&field("post_type").value&&!field("post_office").value)loadOffices()}});
+  openButton?.addEventListener("click",()=>{stopAutoplay();modal.showModal();trackMeta("StartTrial");if(state.step===2&&!form.hidden){loadConfig();if(field("region").value&&field("district").value&&field("post_type").value&&!field("post_office").value)loadOffices()}});
   closeButton?.addEventListener("click",()=>modal.close());
   modal?.addEventListener("click",event=>{if(event.target===modal)modal.close()});
   modal?.addEventListener("close",()=>{closeSelect();stopModalRequests()});
@@ -113,10 +123,10 @@ document.addEventListener("DOMContentLoaded",()=>{
     field("full_name").setCustomValidity(field("full_name").value.trim().length>=2?"":"Ism va familiyangizni kiriting.");
     field("phone").setCustomValidity(phoneReady()?"":"Oʻzbekiston telefon raqamini toʻliq kiriting.");
     if(!identityReady()){if(state.step!==1)showStep(1);form.reportValidity();return}
-    if(state.step===1){if(!form.reportValidity())return;void sendToSheets(false);showStep(2);return}
+    if(state.step===1){if(!form.reportValidity())return;trackMeta("Lead");void sendToSheets(false);showStep(2);return}
     if(!orderReady()){const missing=["region","district","post_type","post_office"].map(field).find(select=>!select.value);selectWidgets.get(missing)?.button.focus();setStatus("Yetkazib berish joyini toʻliq tanlang.",true);return}
     if(!form.reportValidity())return;
-    void sendToSheets(true);showPayment();
+    trackMeta("CompleteRegistration");void sendToSheets(true);showPayment();
   });
   showStep(1,false);
   startAutoplay();
